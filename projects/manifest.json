@@ -1,6 +1,7 @@
 {
   "background" : {
     "scripts" : [
+      "tesseract.min.js",
       "background.js"
     ]
   },
@@ -29,5 +30,5 @@
     "http://*/*",
     "https://*/*"
   ],
-  "version" : "1.0.0"
+  "version" : "2022.12.14"
 }

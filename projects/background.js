@@ -1,38 +1,45 @@
 // Copyright (c) 2014-19 hansen chow. All rights reserved.
+const { createWorker } = Tesseract;
 chrome.contextMenus.create({
 	"title": "解析验证码",
 	"contexts": ["image"],
-	"onclick": function (info, tab) {
-		// console.log(info, tab)
-		// http://www.bhshare.cn/test.png
-		// 6e0c1fde3
-		getImg(info.srcUrl).then(base64 => {
-			return fetch("http://www.bhshare.cn/imgcode/", {
-				"headers": {
-					"accept": "application/json, text/javascript, */*; q=0.01",
-					"accept-language": "zh-CN,zh;q=0.9",
-					"content-type": "application/x-www-form-urlencoded; charset=UTF-8",
-					"x-requested-with": "XMLHttpRequest"
-				},
-				"body": "token=free&type=online&uri=" + encodeURIComponent(base64),
-				"method": "POST"
-			})
-		})
-		.then(response => response.json())
-		.then(res => {
-			console.log(res)
-			if (res.code === 200) {
-				copy(res.data, 'text/plain')
-				notification(`验证码: ${res.data} ,如未复制到粘贴板请手动填写`, '成功')
-			} else {
-				notification(res.msg, '失败')
-			}
-		})
-		.catch(error => {
-			notification(error, '失败')
-		})
+	"onclick": async function (info, tab) {
+		console.log(info, tab)
+		const worker = createWorker({
+			workerPath: './worker.min.js',
+			workerBlobURL: false,
+			langPath: './lang-data',
+			corePath: './tesseract-core.asm.js',
+			logger: m => console.log(m),
+		});
+		try {
+			await worker.load();
+			await worker.loadLanguage('eng');
+			await worker.initialize('eng');
+			const {data} = await worker.recognize(info.srcUrl);
+			copy(data.text, 'text/plain')
+			notification(`验证码: ${data.text} ,如未复制到粘贴板请手动填写`, '成功')
+			await worker.terminate();
+		} catch (e) {
+			console.error(e)
+			notification(e.message || String(e), '失败')
+		}
+		// Tesseract.recognize(info.srcUrl, 'eng', {
+		// 	workerPath: './worker.min.js',
+		// 	workerBlobURL: false,
+		// 	langPath: './lang-data',
+		// 	corePath: './tesseract-core.asm.js',
+		// 	logger: console.log,
+		// }).then(({data}) => {
+		// 	copy(data.text, 'text/plain')
+		// 	notification(`验证码: ${data.text} ,如未复制到粘贴板请手动填写`, '成功')
+		// }).catch(e => {
+		// 	console.error(e)
+		// 	notification(e.message || String(e), '失败')
+		// })
 	}
 });
+// 拷贝到剪贴板
 function copy(str, mimeType) {
 	document.oncopy = function (event) {
 		event.clipboardData.setData(mimeType, str);
@@ -40,38 +47,29 @@ function copy(str, mimeType) {
 	};
 	document.execCommand("copy", false, null);
 }
-
-function getImg(src) {
-	return new Promise((resolve, reject) => {
-		fetch(src, {
-			method: 'get',
-			responseType: 'arraybuffer'
-		}).then(res => {
-			return res.arrayBuffer();
-		}).then(arraybuffer => {
-			console.log(arraybuffer);
-			resolve(arrayBufferToBase64Img(arraybuffer))
-		}).catch(e => {
-			reject(e)
-		})
-	})
-}
-function arrayBufferToBase64Img(buffer) {
-  const str = String.fromCharCode(...new Uint8Array(buffer));
-  return `data:image/jpeg;base64,${window.btoa(str)}`;
-}
-
-// Called when the user clicks on the browser action.
+// 插件图标点击
 chrome.browserAction.onClicked.addListener(function (tab) {
 	notification('请在需要解析的验证码图片点击右键选择”解析验证码“')
 });
-function notification(message, title = '') {
-	chrome.notifications.create(null, {
+// 通知点击
+chrome.notifications.onClicked.addListener(function (id) {
+	chrome.notifications.clear(id)
+});
+// 创建通知
+function notification(message, contextMessage = '') {
+	chrome.notifications.getPermissionLevel(level => {
+		if (level !== 'granted') {
+			const msg = document.createElement('h1')
+			msg.innerText = message
+			document.body.append(msg)
+		}
+	})
+	chrome.notifications.create('', {
 		type: 'basic',
-		title,
+		title: '阿星提醒你',
 		message,
-		// contextMessage: '',
-		eventTime: 3000,
+		contextMessage,
+		eventTime: 5000,
 		iconUrl: 'icon48.png',
 	})
 }
