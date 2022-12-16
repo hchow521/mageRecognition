@@ -1,7 +1,7 @@
 // Copyright (c) 2014-19 hansen chow. All rights reserved.
 const { createWorker } = Tesseract;
 chrome.contextMenus.create({
-	"title": "解析验证码",
+	"title": "提取文本",
 	"contexts": ["image"],
 	"onclick": async function (info, tab) {
 		console.log(info, tab)
@@ -17,6 +17,7 @@ chrome.contextMenus.create({
 			await worker.loadLanguage('eng');
 			await worker.initialize('eng');
 			const {data} = await worker.recognize(info.srcUrl);
+			console.log(data)
 			copy(data.text, 'text/plain')
 			notification(`验证码: ${data.text} ,如未复制到粘贴板请手动填写`, '成功')
 			await worker.terminate();
